@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-
-const RA_OPTION_ICON = { 'Report Only': 'ti-flag' };
 
 export default function SettingsView({ showToast, openListingSameTab, openListingNewTab }) {
   const [duplicationOpen, setDuplicationOpen] = useState(true);
@@ -189,6 +187,19 @@ function SourceRow({
 }) {
   const hasReportOption = source.raOptions.includes('Report Only');
   const isWidget = source.specialConfig === 'per_widget';
+  const [selectedWidgetId, setSelectedWidgetId] = useState('');
+  const subTableRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedWidgetId || !widgetSubOpen || !subTableRef.current) return;
+    subTableRef.current.querySelector(`tr[data-widget-id="${selectedWidgetId}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selectedWidgetId, widgetSubOpen]);
+
+  const handleSelectWidget = (id) => {
+    setSelectedWidgetId(id);
+    if (id && !widgetSubOpen) onToggleWidgetSub();
+  };
 
   let vrCell;
   if (!source.reportEligible) {
@@ -214,6 +225,17 @@ function SourceRow({
             <div className="cb-row">
               <div className="cb on" onClick={() => onChangeRaEnabled(false)} />
               <span>Configured per widget</span>
+              <select
+                className="sel"
+                style={{ marginLeft: 8 }}
+                value={selectedWidgetId}
+                onChange={(e) => handleSelectWidget(e.target.value)}
+              >
+                <option value="">Select Widget</option>
+                {widgets.map((w) => (
+                  <option key={w.id} value={w.id}>{w.widgetName}</option>
+                ))}
+              </select>
               <span className="widget-expand-link" onClick={onToggleWidgetSub}>
                 {widgetSubOpen ? 'Collapse' : 'Expand'} <i className={`ti ti-chevron-${widgetSubOpen ? 'up' : 'down'}`} style={{ fontSize: 11 }} />
               </span>
@@ -257,7 +279,7 @@ function SourceRow({
                 Registration Attempt — Per Widget Configuration
                 <i className="ti ti-info-circle" style={{ fontSize: 12, color: 'var(--t3)' }} title="Configure which Registration Attempt behaviour fires for each widget" />
               </div>
-              <table className="widget-sub-tbl">
+              <table className="widget-sub-tbl" ref={subTableRef}>
                 <thead>
                   <tr>
                     <th style={{ width: 260 }}>Widget Name</th>
@@ -266,7 +288,7 @@ function SourceRow({
                 </thead>
                 <tbody>
                   {widgets.map((w) => (
-                    <tr key={w.id}>
+                    <tr key={w.id} data-widget-id={w.id} className={String(w.id) === String(selectedWidgetId) ? 'hl' : ''}>
                       <td>{w.widgetName}</td>
                       <td>
                         <select
@@ -278,9 +300,7 @@ function SourceRow({
                           <option>Lead Create or Update</option>
                           <option>Lead Create Only</option>
                           <option>Never</option>
-                          <option>Report Only</option>
                         </select>
-                        {RA_OPTION_ICON[w.raOption] && <i className={`ti ${RA_OPTION_ICON[w.raOption]}`} style={{ marginLeft: 6, fontSize: 12, color: 'var(--acc)' }} />}
                       </td>
                     </tr>
                   ))}

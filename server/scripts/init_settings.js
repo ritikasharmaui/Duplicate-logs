@@ -4,7 +4,7 @@
 const { openDb } = require('../db/connection');
 
 const RA_OPTIONS_STANDARD = ['Lead Create Only', 'Never'];
-const RA_OPTIONS_FULL = ['Lead Create Only', 'Lead Create or Update', 'Never', 'Report Only'];
+const RA_OPTIONS_FULL = ['Lead Create Only', 'Lead Create or Update', 'Never'];
 const RA_OPTIONS_TELEPHONY = ['Only First Call', 'Every Call', 'Never'];
 
 const SOURCES = [
