@@ -1,0 +1,14 @@
+{
+  "name": "duplicate-logs-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup:data": "npm --prefix server run import:leads && npm --prefix server run build:duplicates && npm --prefix server run init:settings",
+    "dev:server": "npm --prefix server run start",
+    "dev:client": "npm --prefix client run dev",
+    "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

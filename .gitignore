@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Data (regenerate via `npm run setup:data`)
+server/db/*.db
+server/db/*.db-journal
+server/downloads/*.csv
+
+# Build output
+client/dist/
+client/dist-ssr/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.local
