@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export default function RecordDrawer({ row, onClose, showToast }) {
+export default function RecordDrawer({ row, onClose, showToast, openLeadProfile }) {
   const [animOpen, setAnimOpen] = useState(false);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function RecordDrawer({ row, onClose, showToast }) {
               <div className="dw-val">
                 <a
                   href="#"
-                  onClick={(e) => { e.preventDefault(); showToast('Redirecting to lead profile...'); }}
+                  onClick={(e) => { e.preventDefault(); openLeadProfile(row.matchedLeadId); }}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
                 >
                   {row.matchedLeadRef} <i className="ti ti-external-link" style={{ fontSize: 12 }} />
@@ -78,7 +78,7 @@ export default function RecordDrawer({ row, onClose, showToast }) {
         </div>
         <div className="dw-footer">
           <button className="btn-s" style={{ flex: 1 }} onClick={handleClose}>Close</button>
-          <button className="btn-p" style={{ flex: 2 }} onClick={() => showToast('View Lead — available in full build')}>
+          <button className="btn-p" style={{ flex: 2 }} onClick={() => openLeadProfile(row.matchedLeadId)}>
             View Matched Lead <i className="ti ti-external-link" style={{ fontSize: 13 }} />
           </button>
         </div>

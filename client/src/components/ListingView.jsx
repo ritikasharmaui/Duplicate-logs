@@ -4,7 +4,7 @@ import { SOURCE_LIST, UNIQUE_FIELD_LIST, DATE_PRESETS, dateRangeForPreset } from
 import RecordDrawer from './RecordDrawer';
 import DownloadPanel from './DownloadPanel';
 
-export default function ListingView({ initialSource, showToast, goSettings }) {
+export default function ListingView({ initialSource, showToast, goSettings, openLeadProfile }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -344,7 +344,7 @@ export default function ListingView({ initialSource, showToast, goSettings }) {
                         </div>
                         <div className="lead-ics" onClick={(e) => e.stopPropagation()}>
                           <span className="lead-ic" onClick={(e) => { e.stopPropagation(); setDrawerRow(r); }} title="View matched lead details"><i className="ti ti-eye" /></span>
-                          <span className="lead-ic" onClick={() => showToast('Redirecting to lead profile...')} title="Open lead profile"><i className="ti ti-external-link" /></span>
+                          <span className="lead-ic" onClick={(e) => { e.stopPropagation(); openLeadProfile(r.matchedLeadId); }} title="Open lead profile"><i className="ti ti-external-link" /></span>
                         </div>
                       </div>
                     </td>
@@ -392,7 +392,7 @@ export default function ListingView({ initialSource, showToast, goSettings }) {
         </div>
       </div>
 
-      <RecordDrawer row={drawerRow} onClose={() => setDrawerRow(null)} showToast={showToast} />
+      <RecordDrawer row={drawerRow} onClose={() => setDrawerRow(null)} showToast={showToast} openLeadProfile={openLeadProfile} />
       <DownloadPanel
         open={downloadOpen}
         onClose={() => setDownloadOpen(false)}

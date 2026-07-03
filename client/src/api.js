@@ -21,6 +21,14 @@ export const api = {
 
   queueDownload: (columns, filters) =>
     req('/download-requests', { method: 'POST', body: JSON.stringify({ columns, filters }) }),
+
+  getLeads: (params) => req(`/leads?${new URLSearchParams(params).toString()}`),
+  getLeadFacets: () => req('/leads/facets'),
+  getLead: (id) => req(`/leads/${id}`),
+  getLeadAuditTrail: (id) => req(`/leads/${id}/audit-trail`),
+  compareLeadWithDuplicate: (id, duplicateRecordId) => req(`/leads/${id}/compare/${duplicateRecordId}`),
+  mergeLeadFromDuplicate: (id, payload) =>
+    req(`/leads/${id}/merge-from-duplicate`, { method: 'POST', body: JSON.stringify(payload) }),
 };
 
 export const DOWNLOAD_BASE = BASE;

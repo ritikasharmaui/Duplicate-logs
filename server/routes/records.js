@@ -116,6 +116,8 @@ router.post('/bulk-delete', (req, res) => {
 function shapeRow(r) {
   return {
     id: r.id,
+    incomingLeadId: r.incoming_lead_id,
+    matchedLeadId: r.matched_lead_id,
     incomingLeadName: r.incoming_lead_name,
     matchedLeadName: r.matched_lead_name,
     matchedLeadRef: r.matched_lead_ref,
