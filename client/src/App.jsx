@@ -1,11 +1,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import SettingsView from './components/SettingsView';
 import ListingView from './components/ListingView';
+import LeadManagerListing from './components/LeadManagerListing';
+import LeadProfile from './components/LeadProfile';
 import Toast from './components/Toast';
 
 function App() {
   const [view, setView] = useState('settings');
   const [listingSource, setListingSource] = useState(null);
+  const [leadProfileId, setLeadProfileId] = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast = useCallback((msg, ok = true) => {
@@ -14,11 +17,17 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'listing') {
+    const v = params.get('view');
+    if (v === 'listing') {
       setListingSource(params.get('src') || null);
       setView('listing');
-      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (v === 'leadProfile') {
+      const id = params.get('leadId');
+      if (id) { setLeadProfileId(id); setView('leadProfile'); }
+    } else if (v === 'leadManager') {
+      setView('leadManager');
     }
+    if (v) window.history.replaceState({}, document.title, window.location.pathname);
   }, []);
 
   const openListingSameTab = (src) => {
@@ -35,6 +44,11 @@ function App() {
   };
 
   const goSettings = () => setView('settings');
+  const openLeadManager = () => setView('leadManager');
+  const openLeadProfile = (id) => {
+    setLeadProfileId(id);
+    setView('leadProfile');
+  };
 
   return (
     <div id="app">
@@ -63,7 +77,13 @@ function App() {
           <div className="si on"><i className="ti ti-sparkles" /></div>
           <div className="si"><i className="ti ti-layout-grid" /></div>
           <div className="si"><i className="ti ti-building" /></div>
-          <div className="si"><i className="ti ti-users" /></div>
+          <div
+            className={`si ${view === 'leadManager' || view === 'leadProfile' ? 'on' : ''}`}
+            onClick={openLeadManager}
+            title="Lead Manager"
+          >
+            <i className="ti ti-users" />
+          </div>
           <div className="si"><i className="ti ti-bolt" /></div>
           <div className="si-sep" />
           <div className="si"><i className="ti ti-file-text" /></div>
@@ -84,6 +104,26 @@ function App() {
               initialSource={listingSource}
               showToast={showToast}
               goSettings={goSettings}
+              openLeadProfile={openLeadProfile}
+            />
+          )}
+        </div>
+
+        <div className={`view ${view === 'leadManager' ? 'active' : ''}`} id="vlm" style={{ flexDirection: 'column' }}>
+          {view === 'leadManager' && (
+            <LeadManagerListing
+              showToast={showToast}
+              openLeadProfile={openLeadProfile}
+            />
+          )}
+        </div>
+
+        <div className={`view ${view === 'leadProfile' ? 'active' : ''}`} id="vlp" style={{ flexDirection: 'column' }}>
+          {view === 'leadProfile' && leadProfileId && (
+            <LeadProfile
+              leadId={leadProfileId}
+              showToast={showToast}
+              goLeadManager={openLeadManager}
             />
           )}
         </div>
