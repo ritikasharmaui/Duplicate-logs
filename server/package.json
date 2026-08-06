@@ -4,8 +4,11 @@
   "private": true,
   "type": "commonjs",
   "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "start": "node scripts/demo_seed.js && node index.js",
+    "start": "node index.js",
     "import:leads": "node scripts/import_leads.js",
     "build:duplicates": "node scripts/build_duplicates.js",
     "init:settings": "node scripts/init_settings.js"
