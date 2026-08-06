@@ -1,6 +1,14 @@
 export const SOURCE_LIST = [
   'Add Quick Lead', 'Widget', 'Landing Page', 'Telephony Inbound',
   'FB Lead', 'Google Lead', 'Zapier Lead', 'AM / Single Upload', 'Publisher',
+  'Niaa Web (Web, Facebook)', 'WABA (Whatsapp Message)', 'Publisher API',
+  'Gmail Connector', 'Outlook Connector',
+];
+
+// Sources that can generate Duplicate Lead Records (Report-eligible)
+export const REPORT_SOURCE_LIST = [
+  'Widget', 'Landing Page', 'FB Lead', 'Google Lead', 'Zapier Lead',
+  'Niaa Web (Web, Facebook)',
 ];
 
 export const UNIQUE_FIELD_LIST = ['Registered Email', 'Registered Mobile', 'Aadhaar Card'];

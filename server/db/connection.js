@@ -25,6 +25,27 @@ function openDb() {
   // EXISTS per lead) has to full-scan duplicate_lead_records for every one of 115k+ leads.
   db.exec('CREATE INDEX IF NOT EXISTS idx_dlr_incoming ON duplicate_lead_records (incoming_lead_id);');
   db.exec('CREATE INDEX IF NOT EXISTS idx_dlr_matched ON duplicate_lead_records (matched_lead_id);');
+
+  // Resolution tracking on duplicate records (added Session 5)
+  try { db.exec('ALTER TABLE duplicate_lead_records ADD COLUMN resolution_status TEXT DEFAULT NULL'); } catch (e) { /* column already exists */ }
+  try { db.exec('ALTER TABLE duplicate_lead_records ADD COLUMN resolved_at TEXT DEFAULT NULL'); } catch (e) { /* column already exists */ }
+  try { db.exec('ALTER TABLE duplicate_lead_records ADD COLUMN resolved_by TEXT DEFAULT NULL'); } catch (e) { /* column already exists */ }
+
+  // Timeline events for lead profile (added Session 5)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS lead_timeline_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lead_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      event_text TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      created_at_ms INTEGER NOT NULL,
+      created_by TEXT NOT NULL,
+      fields_changed TEXT DEFAULT NULL
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_lte_lead ON lead_timeline_events (lead_id);');
+
   return db;
 }
 

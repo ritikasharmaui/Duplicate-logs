@@ -153,112 +153,192 @@ router.get('/:id/audit-trail', (req, res) => {
   }
 });
 
-router.get('/:id/compare/:duplicateRecordId', (req, res) => {
+router.get('/:id/timeline', (req, res) => {
   const db = openDb();
   try {
-    const leadId = Number(req.params.id);
-    const record = db.prepare(
-      'SELECT * FROM duplicate_lead_records WHERE id = ? AND deleted = 0'
-    ).get(req.params.duplicateRecordId);
-    if (!record) return res.status(404).json({ error: 'Duplicate record not found' });
-    if (Number(record.matched_lead_id) !== leadId) {
-      return res.status(400).json({ error: 'This lead is not the original side of this duplicate match' });
-    }
-
-    const otherLeadId = record.incoming_lead_id;
-    const original = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
-    const duplicate = db.prepare('SELECT * FROM leads WHERE id = ?').get(otherLeadId);
-    if (!original || !duplicate) return res.status(404).json({ error: 'Lead not found' });
-
-    const fields = Object.keys(original)
-      .filter((k) => k !== 'id')
-      .map((k) => ({
-        field: k,
-        originalValue: (original[k] || '').trim(),
-        duplicateValue: (duplicate[k] || '').trim(),
-      }))
-      .filter((f) => f.originalValue !== f.duplicateValue && (f.originalValue || f.duplicateValue));
-
-    const cascadeRow = db.prepare(`
-      SELECT COUNT(*) c FROM duplicate_lead_records
-      WHERE deleted = 0 AND id != ? AND (incoming_lead_id = ? OR matched_lead_id = ?)
-    `).get(record.id, otherLeadId, otherLeadId);
-
+    const rows = db.prepare(
+      'SELECT * FROM lead_timeline_events WHERE lead_id = ? ORDER BY created_at_ms DESC'
+    ).all(req.params.id);
     res.json({
-      otherLeadId,
-      otherLeadName: duplicate['Name'],
-      fields,
-      cascadeCount: cascadeRow.c,
+      rows: rows.map((r) => ({
+        id: r.id,
+        eventType: r.event_type,
+        eventText: r.event_text,
+        createdAt: r.created_at,
+        createdAtMs: r.created_at_ms,
+        createdBy: r.created_by,
+        fieldsChanged: r.fields_changed ? JSON.parse(r.fields_changed) : [],
+      })),
     });
   } finally {
     db.close();
   }
 });
 
-router.post('/:id/merge-from-duplicate', (req, res) => {
+// A lead can be the "matched" (anchor) side of many incoming duplicates at once - the
+// detection engine anchors every group to its earliest-registered member (see
+// build_duplicates.js), so a popular email/mobile can anchor up to MAX_GROUP_SIZE-1 duplicates.
+// This endpoint collapses that N-way group into per-field value clusters (instead of N pairwise
+// diffs) so the UI can offer one "which value wins" choice per field, with a count of how many
+// duplicate leads carried each value, regardless of how large the group is.
+router.get('/:id/duplicate-group', (req, res) => {
   const db = openDb();
   try {
     const leadId = Number(req.params.id);
-    const { duplicateRecordId, fieldSelections = [] } = req.body;
+    const anchor = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
+    if (!anchor) return res.status(404).json({ error: 'Lead not found' });
 
-    const record = db.prepare(
-      'SELECT * FROM duplicate_lead_records WHERE id = ? AND deleted = 0'
-    ).get(duplicateRecordId);
-    if (!record) return res.status(404).json({ error: 'Duplicate record not found' });
-    if (Number(record.matched_lead_id) !== leadId) {
-      return res.status(400).json({ error: 'This lead is not the original side of this duplicate match' });
+    const dupRows = db.prepare(`
+      SELECT * FROM duplicate_lead_records WHERE deleted = 0 AND matched_lead_id = ? ORDER BY id ASC
+    `).all(leadId);
+
+    if (dupRows.length === 0) {
+      return res.json({ matchedField: null, duplicates: [], fieldsToReview: [] });
     }
 
-    const otherLeadId = record.incoming_lead_id;
-    const original = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
-    const duplicate = db.prepare('SELECT * FROM leads WHERE id = ?').get(otherLeadId);
-    if (!original || !duplicate) return res.status(404).json({ error: 'Lead not found' });
+    const duplicates = dupRows
+      .map((r) => ({
+        duplicateRecordId: r.id,
+        leadId: r.incoming_lead_id,
+        lead: db.prepare('SELECT * FROM leads WHERE id = ?').get(r.incoming_lead_id),
+        leadInflowSource: r.lead_inflow_source,
+        userRegistrationDate: r.user_registration_date,
+      }))
+      .filter((d) => d.lead);
 
-    // Never trust client-sent values - only the chosen field names are honored, and this
-    // server re-reads both leads fresh so the values actually written always come from the DB.
-    const validColumns = new Set(Object.keys(original).filter((k) => k !== 'id'));
+    const columns = Object.keys(anchor).filter((k) => k !== 'id');
+    const fieldsToReview = [];
+    for (const field of columns) {
+      const clusters = new Map(); // trimmed value -> { value, leadIds: [] }
+      const addValue = (leadIdForValue, rawValue) => {
+        const value = (rawValue || '').trim();
+        if (!clusters.has(value)) clusters.set(value, { value, leadIds: [] });
+        clusters.get(value).leadIds.push(leadIdForValue);
+      };
+      addValue(anchor.id, anchor[field]);
+      for (const d of duplicates) addValue(d.leadId, d.lead[field]);
+
+      if (clusters.size <= 1) continue; // every lead in the group agrees - nothing to reconcile
+
+      const options = [...clusters.values()]
+        .map((c) => ({ value: c.value, isAnchor: c.leadIds.includes(anchor.id), leadIds: c.leadIds, count: c.leadIds.length }))
+        .sort((a, b) => (b.isAnchor - a.isAnchor) || (b.count - a.count));
+
+      fieldsToReview.push({ field, options });
+    }
+
+    res.json({
+      matchedField: dupRows[0].matched_field,
+      duplicates: duplicates.map((d) => ({
+        duplicateRecordId: d.duplicateRecordId,
+        leadId: d.leadId,
+        name: d.lead['Name'],
+        matchedValue: d.lead[dupRows[0].matched_field],
+        leadInflowSource: d.leadInflowSource,
+        userRegistrationDate: d.userRegistrationDate,
+      })),
+      fieldsToReview,
+    });
+  } finally {
+    db.close();
+  }
+});
+
+router.post('/:id/merge-group', (req, res) => {
+  const db = openDb();
+  try {
+    const leadId = Number(req.params.id);
+    const { duplicateRecordIds = [], fieldSelections = [] } = req.body;
+    if (!Array.isArray(duplicateRecordIds) || duplicateRecordIds.length === 0) {
+      return res.status(400).json({ error: 'No duplicate records selected' });
+    }
+
+    const anchor = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
+    if (!anchor) return res.status(404).json({ error: 'Lead not found' });
+
+    const placeholders = duplicateRecordIds.map(() => '?').join(',');
+    const dupRows = db.prepare(`
+      SELECT * FROM duplicate_lead_records WHERE deleted = 0 AND matched_lead_id = ? AND id IN (${placeholders})
+    `).all(leadId, ...duplicateRecordIds);
+    if (dupRows.length !== duplicateRecordIds.length) {
+      return res.status(400).json({ error: 'One or more duplicate records are invalid for this lead' });
+    }
+
+    const involvedLeadIds = new Set([leadId, ...dupRows.map((r) => r.incoming_lead_id)]);
+    const validColumns = new Set(Object.keys(anchor).filter((k) => k !== 'id'));
+    const leadsById = new Map([[leadId, anchor]]);
+    for (const id of involvedLeadIds) {
+      if (!leadsById.has(id)) leadsById.set(id, db.prepare('SELECT * FROM leads WHERE id = ?').get(id));
+    }
+
+    // Never trust client-sent values - only (field, sourceLeadId) pairs are honored, and both
+    // are re-resolved against freshly-read rows so the values actually written always come from the DB.
     const changes = [];
     for (const sel of fieldSelections) {
-      if (sel.source !== 'duplicate' || !validColumns.has(sel.field)) continue;
-      const oldValue = original[sel.field];
-      const newValue = duplicate[sel.field];
+      const sourceLeadId = Number(sel.sourceLeadId);
+      if (!validColumns.has(sel.field) || !involvedLeadIds.has(sourceLeadId)) continue;
+      const sourceLead = leadsById.get(sourceLeadId);
+      if (!sourceLead) continue;
+      const oldValue = anchor[sel.field];
+      const newValue = sourceLead[sel.field];
       if ((oldValue || '').trim() !== (newValue || '').trim()) {
         changes.push({ field: sel.field, oldValue, newValue });
       }
     }
 
+    // Turn FK off before BEGIN so the pragma takes effect for the whole transaction.
+    // We keep the resolved duplicate_lead_records rows (they get resolution_status='updated')
+    // and delete the incoming lead rows directly, which would otherwise violate the FK.
+    db.exec('PRAGMA foreign_keys = OFF;');
     db.exec('BEGIN');
+
+    const now = new Date();
 
     if (changes.length) {
       const setSql = changes.map((c) => `${q(c.field)} = ?`).join(', ');
       db.prepare(`UPDATE leads SET ${setSql} WHERE id = ?`).run(...changes.map((c) => c.newValue), leadId);
 
-      const now = new Date();
       const insertAudit = db.prepare(`
         INSERT INTO lead_audit_trail (lead_id, field_name, old_value, new_value, change_source, changed_by, changed_at, changed_at_ms)
-        VALUES (?, ?, ?, ?, 'duplicate_merge', 'Ritika Sharma', ?, ?)
+        VALUES (?, ?, ?, ?, 'duplicate_group_merge', 'Ritika Sharma', ?, ?)
       `);
       for (const c of changes) {
         insertAudit.run(leadId, c.field, c.oldValue, c.newValue, now.toISOString(), now.getTime());
       }
     }
 
-    const removedRow = db.prepare(
-      'SELECT COUNT(*) c FROM duplicate_lead_records WHERE incoming_lead_id = ? OR matched_lead_id = ?'
-    ).get(otherLeadId, otherLeadId);
-    // Every duplicate_lead_records row referencing the other lead must go first - the FK
-    // (PRAGMA foreign_keys = ON) blocks deleting a leads row that's still referenced.
-    db.prepare('DELETE FROM duplicate_lead_records WHERE incoming_lead_id = ? OR matched_lead_id = ?').run(otherLeadId, otherLeadId);
-    db.prepare('DELETE FROM leads WHERE id = ?').run(otherLeadId);
+    // Mark the resolved records with resolution_status='updated' so the listing can
+    // display them as disabled rows instead of hiding them.
+    const markResolved = db.prepare(
+      'UPDATE duplicate_lead_records SET resolution_status=?, resolved_at=?, resolved_by=? WHERE id=?'
+    );
+    for (const id of duplicateRecordIds) {
+      markResolved.run('updated', now.toISOString(), 'Ritika Sharma', id);
+    }
+
+    // Write a timeline event on the anchor lead so the Timeline tab can surface it.
+    const fieldsChangedJson = JSON.stringify(changes.map((c) => ({ field: c.field, oldValue: c.oldValue, newValue: c.newValue })));
+    const eventText = changes.length > 0
+      ? `Ritika Sharma resolved ${duplicateRecordIds.length} duplicate lead${duplicateRecordIds.length === 1 ? '' : 's'} — ${changes.length} field${changes.length === 1 ? '' : 's'} updated`
+      : `Ritika Sharma resolved ${duplicateRecordIds.length} duplicate lead${duplicateRecordIds.length === 1 ? '' : 's'} — no field changes`;
+    db.prepare(
+      'INSERT INTO lead_timeline_events (lead_id, event_type, event_text, created_at, created_at_ms, created_by, fields_changed) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(leadId, 'duplicate_resolved', eventText, now.toISOString(), now.getTime(), 'Ritika Sharma', fieldsChangedJson);
+
+    const removedLeadIds = dupRows.map((r) => r.incoming_lead_id);
+    for (const otherLeadId of removedLeadIds) {
+      // Delete only the non-resolved records for this incoming lead (e.g. cases where it was
+      // also a matched_lead for some other record). The resolved records we just marked stay.
+      db.prepare(
+        'DELETE FROM duplicate_lead_records WHERE (incoming_lead_id = ? OR matched_lead_id = ?) AND resolution_status IS NULL'
+      ).run(otherLeadId, otherLeadId);
+      db.prepare('DELETE FROM leads WHERE id = ?').run(otherLeadId);
+    }
 
     db.exec('COMMIT');
+    db.exec('PRAGMA foreign_keys = ON;');
 
-    res.json({
-      ok: true,
-      removedLeadId: otherLeadId,
-      removedDuplicateRecords: removedRow.c,
-      fieldsChanged: changes.length,
-    });
+    res.json({ ok: true, removedLeadIds, fieldsChanged: changes.length });
   } catch (err) {
     db.exec('ROLLBACK');
     res.status(500).json({ error: err.message });

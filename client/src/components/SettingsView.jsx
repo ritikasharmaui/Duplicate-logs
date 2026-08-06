@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api';
 
 export default function SettingsView({ showToast, openListingSameTab, openListingNewTab }) {
@@ -111,7 +112,7 @@ export default function SettingsView({ showToast, openListingSameTab, openListin
                     <table className="tbl">
                       <thead>
                         <tr>
-                          <th style={{ width: 220 }}>Lead Inflow</th>
+                          <th style={{ width: 220 }}>Lead Origin</th>
                           <th style={{ width: 260 }}>
                             Registration Attempt{' '}
                             <i className="ti ti-info-circle" style={{ fontSize: 12, color: '#9CA3AF' }} title="When checked, logs a Registration Attempt on duplicate events for this source" />
@@ -162,8 +163,8 @@ export default function SettingsView({ showToast, openListingSameTab, openListin
                       <p style={{ marginTop: 6 }}>Values accepted: <strong>Yes</strong> | <strong>No</strong>. This field is optional and maintains backward compatibility.</p>
                     </div>
                     <div className="ptn-sec" style={{ marginTop: 12 }}>
-                      <div className="ptn-sec-t">Report Only</div>
-                      <p>Sources marked <strong>Report Only</strong> (Widget, Landing Page, FB Lead, Google Lead, Zapier Lead) write a Duplicate Lead Record on every duplicate. Use this when you want to log the Duplicate record from the lead creation/inflow sources.</p>
+                      <div className="ptn-sec-t">Report</div>
+                      <p>Sources with the <strong>Report</strong> checkbox enabled (Widget, Landing Page, FB Lead, Google Lead, Zapier Lead) write a Duplicate Lead Record on every duplicate. Use this when you want to log the Duplicate record from the lead creation/inflow sources.</p>
                     </div>
                     <div className="ptn-sec" style={{ marginTop: 12 }}>
                       <div className="ptn-sec-t">Bulk Offline Upload</div>
@@ -185,29 +186,13 @@ function SourceRow({
   onChangeRaEnabled, onChangeRaSelected, onChangeReportEnabled,
   onViewRecords, onViewRecordsNewTab, onChangeWidget,
 }) {
-  const hasReportOption = source.raOptions.includes('Report Only');
   const isWidget = source.specialConfig === 'per_widget';
-  const [selectedWidgetId, setSelectedWidgetId] = useState('');
-  const subTableRef = useRef(null);
-
-  useEffect(() => {
-    if (!selectedWidgetId || !widgetSubOpen || !subTableRef.current) return;
-    subTableRef.current.querySelector(`tr[data-widget-id="${selectedWidgetId}"]`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [selectedWidgetId, widgetSubOpen]);
-
-  const handleSelectWidget = (id) => {
-    setSelectedWidgetId(id);
-    if (id && !widgetSubOpen) onToggleWidgetSub();
-  };
 
   let vrCell;
   if (!source.reportEligible) {
     vrCell = <span style={{ fontSize: 12, color: 'var(--t3)' }}>—</span>;
   } else if (!source.reportEnabled) {
     vrCell = <span className="vr-btn off"><i className="ti ti-external-link" style={{ fontSize: 11 }} /> View records</span>;
-  } else if (source.recordCount === 0) {
-    vrCell = <span style={{ fontSize: 12, color: 'var(--t3)' }}>0 records</span>;
   } else {
     vrCell = (
       <span className="vr-btn" onClick={onViewRecordsNewTab} title="Opens in a new tab">
@@ -225,17 +210,6 @@ function SourceRow({
             <div className="cb-row">
               <div className="cb on" onClick={() => onChangeRaEnabled(false)} />
               <span>Configured per widget</span>
-              <select
-                className="sel"
-                style={{ marginLeft: 8 }}
-                value={selectedWidgetId}
-                onChange={(e) => handleSelectWidget(e.target.value)}
-              >
-                <option value="">Select Widget</option>
-                {widgets.map((w) => (
-                  <option key={w.id} value={w.id}>{w.widgetName}</option>
-                ))}
-              </select>
               <span className="widget-expand-link" onClick={onToggleWidgetSub}>
                 {widgetSubOpen ? 'Collapse' : 'Expand'} <i className={`ti ti-chevron-${widgetSubOpen ? 'up' : 'down'}`} style={{ fontSize: 11 }} />
               </span>
@@ -257,7 +231,7 @@ function SourceRow({
           )}
         </td>
         <td>
-          {hasReportOption ? (
+          {source.reportEligible ? (
             <div className={`cb ${source.reportEnabled ? 'on' : ''}`} onClick={() => onChangeReportEnabled(!source.reportEnabled)} />
           ) : (
             <span style={{ fontSize: 12, color: 'var(--t3)' }}>—</span>
@@ -274,33 +248,19 @@ function SourceRow({
         <tr className="widget-sub-row" style={{ display: widgetSubOpen ? undefined : 'none' }}>
           <td colSpan={6} style={{ padding: 0 }}>
             <div className="widget-sub-inner">
-              <div className="widget-sub-label">
-                <i className="ti ti-settings" style={{ fontSize: 12 }} />
-                Registration Attempt — Per Widget Configuration
-                <i className="ti ti-info-circle" style={{ fontSize: 12, color: 'var(--t3)' }} title="Configure which Registration Attempt behaviour fires for each widget" />
-              </div>
-              <table className="widget-sub-tbl" ref={subTableRef}>
-                <thead>
-                  <tr>
-                    <th style={{ width: 260 }}>Widget Name</th>
-                    <th>Registration Attempt Behaviour</th>
-                  </tr>
-                </thead>
+              <table className="widget-sub-tbl">
                 <tbody>
-                  {widgets.map((w) => (
-                    <tr key={w.id} data-widget-id={w.id} className={String(w.id) === String(selectedWidgetId) ? 'hl' : ''}>
-                      <td>{w.widgetName}</td>
+                  {WIDGET_RA_ACTIONS.map((action, i) => (
+                    <tr key={action}>
+                      {i === 0 && (
+                        <td rowSpan={WIDGET_RA_ACTIONS.length} style={{ width: 220, verticalAlign: 'top', fontWeight: 600 }}>
+                          Select Widget Name{' '}
+                          <i className="ti ti-info-circle" style={{ fontSize: 12, color: 'var(--t3)', fontWeight: 400 }} title="Assign widgets to the Registration Attempt behaviour that should apply to them" />
+                        </td>
+                      )}
+                      <td style={{ width: 200 }}>{action}</td>
                       <td>
-                        <select
-                          className="sel"
-                          style={{ minWidth: 220 }}
-                          value={w.raOption}
-                          onChange={(e) => onChangeWidget(w.id, e.target.value)}
-                        >
-                          <option>Lead Create or Update</option>
-                          <option>Lead Create Only</option>
-                          <option>Never</option>
-                        </select>
+                        <WidgetMultiSelect widgets={widgets} action={action} onAssign={onChangeWidget} />
                       </td>
                     </tr>
                   ))}
@@ -311,5 +271,128 @@ function SourceRow({
         </tr>
       )}
     </>
+  );
+}
+
+const WIDGET_RA_ACTIONS = ['Lead Create or Update', 'Lead Create Only', 'Never'];
+const WIDGET_RA_DEFAULT = 'Lead Create or Update';
+
+function WidgetMultiSelect({ widgets, action, onAssign }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [pos, setPos] = useState(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const PANEL_HEIGHT_ESTIMATE = 300;
+    const place = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < PANEL_HEIGHT_ESTIMATE && rect.top > spaceBelow;
+      const width = Math.max(rect.width, 260);
+      setPos({
+        top: openUpward ? undefined : rect.bottom + 4,
+        bottom: openUpward ? window.innerHeight - rect.top + 4 : undefined,
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        width,
+      });
+    };
+    place();
+
+    const onDocClick = (e) => {
+      if (triggerRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onScroll = (e) => {
+      if (panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
+    document.addEventListener('mousedown', onDocClick);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [open]);
+
+  const selected = widgets.filter((w) => w.raOption === action);
+  const allSelected = widgets.length > 0 && selected.length === widgets.length;
+  const filtered = widgets.filter((w) => w.widgetName.toLowerCase().includes(search.toLowerCase()));
+
+  const label = selected.length === 0
+    ? 'Select a Widget'
+    : selected.length === 1
+      ? selected[0].widgetName
+      : `${selected.length} widgets selected`;
+
+  const toggleWidget = (w) => {
+    if (w.raOption === action) {
+      if (action !== WIDGET_RA_DEFAULT) onAssign(w.id, WIDGET_RA_DEFAULT);
+    } else {
+      onAssign(w.id, action);
+    }
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      if (action !== WIDGET_RA_DEFAULT) widgets.forEach((w) => onAssign(w.id, WIDGET_RA_DEFAULT));
+    } else {
+      widgets.forEach((w) => onAssign(w.id, action));
+    }
+  };
+
+  return (
+    <div className="wms" ref={triggerRef}>
+      <div className={`wms-trigger ${selected.length === 0 ? 'placeholder' : ''}`} onClick={() => setOpen((o) => !o)}>
+        <span>{label}</span>
+        <i className={`ti ti-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: 12 }} />
+      </div>
+      {open && pos && createPortal(
+        <div className="wms-panel" ref={panelRef} style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width }}>
+          <div className="wms-search">
+            <i className="ti ti-search" />
+            <input
+              autoFocus
+              placeholder="Search widgets…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="wms-list">
+            {filtered.length === 0 ? (
+              <div className="wms-empty">No widgets found</div>
+            ) : (
+              <>
+                {!search && (
+                  <div
+                    className={`wms-item all ${allSelected ? 'checked' : ''}`}
+                    onClick={toggleAll}
+                  >
+                    All Widget <i className="ti ti-check" />
+                  </div>
+                )}
+                {filtered.map((w) => (
+                  <div
+                    key={w.id}
+                    className={`wms-item ${w.raOption === action ? 'checked' : ''}`}
+                    onClick={() => toggleWidget(w)}
+                  >
+                    {w.widgetName} <i className="ti ti-check" />
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
   );
 }

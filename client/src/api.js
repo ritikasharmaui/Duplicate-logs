@@ -17,7 +17,8 @@ export const api = {
   saveSettings: (payload) => req('/settings', { method: 'PUT', body: JSON.stringify(payload) }),
 
   getRecords: (params) => req(`/duplicate-records?${new URLSearchParams(params).toString()}`),
-  bulkDelete: (ids) => req('/duplicate-records/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+  bulkDelete: (incomingLeadIds) => req('/duplicate-records/bulk-delete', { method: 'POST', body: JSON.stringify({ incoming_lead_ids: incomingLeadIds }) }),
+  getMatches: (incomingLeadId) => req(`/duplicate-records/matches/${incomingLeadId}`),
 
   queueDownload: (columns, filters) =>
     req('/download-requests', { method: 'POST', body: JSON.stringify({ columns, filters }) }),
@@ -26,9 +27,10 @@ export const api = {
   getLeadFacets: () => req('/leads/facets'),
   getLead: (id) => req(`/leads/${id}`),
   getLeadAuditTrail: (id) => req(`/leads/${id}/audit-trail`),
-  compareLeadWithDuplicate: (id, duplicateRecordId) => req(`/leads/${id}/compare/${duplicateRecordId}`),
-  mergeLeadFromDuplicate: (id, payload) =>
-    req(`/leads/${id}/merge-from-duplicate`, { method: 'POST', body: JSON.stringify(payload) }),
+  getLeadTimeline: (id) => req(`/leads/${id}/timeline`),
+  getDuplicateGroup: (id) => req(`/leads/${id}/duplicate-group`),
+  mergeDuplicateGroup: (id, payload) =>
+    req(`/leads/${id}/merge-group`, { method: 'POST', body: JSON.stringify(payload) }),
 };
 
 export const DOWNLOAD_BASE = BASE;

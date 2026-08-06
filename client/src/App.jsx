@@ -17,11 +17,17 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'listing') {
+    const v = params.get('view');
+    if (v === 'listing') {
       setListingSource(params.get('src') || null);
       setView('listing');
-      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (v === 'leadProfile') {
+      const id = params.get('leadId');
+      if (id) { setLeadProfileId(id); setView('leadProfile'); }
+    } else if (v === 'leadManager') {
+      setView('leadManager');
     }
+    if (v) window.history.replaceState({}, document.title, window.location.pathname);
   }, []);
 
   const openListingSameTab = (src) => {
