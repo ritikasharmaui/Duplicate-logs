@@ -16,6 +16,24 @@ const FIXED_DOWNLOAD_COLS = [
   'Duplicate Value', 'Lead Origin', 'Detected On',
 ];
 
+function maskValue(val, field) {
+  if (!val) return '—';
+  const f = (field || '').toLowerCase();
+  if (f.includes('email') || val.includes('@')) {
+    const at = val.indexOf('@');
+    if (at > 0) {
+      const user = val.slice(0, at);
+      const domain = val.slice(at);
+      return user.slice(0, Math.min(3, user.length)) + '****' + domain;
+    }
+    return val.slice(0, 3) + '****';
+  }
+  // mobile / aadhaar — keep first 4 and last 2, mask middle
+  const digits = String(val).replace(/\D/g, '');
+  if (digits.length >= 8) return digits.slice(0, 4) + '*'.repeat(digits.length - 6) + digits.slice(-2);
+  return val.slice(0, 2) + '****';
+}
+
 export default function ListingView({ initialSource, showToast, goSettings, openLeadProfile }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -421,7 +439,7 @@ export default function ListingView({ initialSource, showToast, goSettings, open
                 <tr><td colSpan={7}><div className="empty"><i className="ti ti-search-off" />No records match your filters.</div></td></tr>
               ) : (
                 rows.map((r) => {
-                  const isMulti = r.matchCount > 1;
+                  const isMulti = (r.sameAnchorCount || 1) > 1;
                   return (
                     <tr
                       key={r.incomingLeadId}
@@ -438,7 +456,7 @@ export default function ListingView({ initialSource, showToast, goSettings, open
 
                       {/* Duplicate Value */}
                       <td style={{ fontSize: 12, color: 'var(--t2)', fontFamily: 'monospace' }}>
-                        {r.incomingValue || '—'}
+                        {maskValue(r.incomingValue, r.matchedField)}
                       </td>
 
                       {/* Matched Lead */}
@@ -460,7 +478,7 @@ export default function ListingView({ initialSource, showToast, goSettings, open
                                 style={{ marginTop: 3, display: 'inline-block' }}
                                 onClick={(e) => { e.stopPropagation(); setDrawerRow(r); }}
                               >
-                                +{r.matchCount - 1} more
+                                +{(r.sameAnchorCount || 1) - 1} more
                               </span>
                             </div>
                           </div>

@@ -84,7 +84,10 @@ router.get('/', (req, res) => {
         MIN(initiated_by) AS initiated_by,
         MIN(resolution_status) AS resolution_status,
         MIN(resolved_at) AS resolved_at,
-        MIN(resolved_by) AS resolved_by
+        MIN(resolved_by) AS resolved_by,
+        (SELECT COUNT(*) FROM duplicate_lead_records d2
+         WHERE d2.matched_lead_id = MIN(duplicate_lead_records.matched_lead_id)
+           AND d2.deleted = 0) AS same_anchor_count
       FROM duplicate_lead_records
       WHERE ${where}
       GROUP BY incoming_lead_id
@@ -173,6 +176,7 @@ function shapeGroupedRow(r) {
     incomingLeadName: r.incoming_lead_name,
     incomingValue: r.incoming_value,
     matchCount: r.match_count || 1,
+    sameAnchorCount: r.same_anchor_count || 1,
     matchedLeadId: r.matched_lead_id,
     matchedLeadName: r.matched_lead_name,
     matchedLeadRef: r.matched_lead_ref,
