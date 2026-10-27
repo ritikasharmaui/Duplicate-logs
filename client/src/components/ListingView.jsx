@@ -286,6 +286,13 @@ export default function ListingView({ initialSource, showToast, goSettings, open
         </div>
       </div>
 
+      <div className="retention-note">
+        <i className="ti ti-info-circle" style={{ fontSize: 15, flexShrink: 0 }} />
+        <span>
+          Duplicate lead records are kept for <strong>10 days</strong> from the date they are detected and are then removed automatically. Download the records if you need them for longer.
+        </span>
+      </div>
+
       {/* Horizontal filter bar */}
       {filterBarOpen && (
         <div className="filter-bar">
